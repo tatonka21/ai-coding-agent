@@ -125,48 +125,211 @@ body {
 #main-content {
   display: flex;
   flex: 1;
+}
+
 /* ============================================
-   EDITOR PANEL (Left)
+   EDITOR PANEL (Left) - Split Layout
    ============================================ */
 #editor-panel {
   flex: 1;
   width: 0;
   min-width: 200px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   border-right: 1px solid var(--border-color);
   background: var(--bg-base);
 }
 
-/* File Tabs */
-#file-tabs {
-  display: flex;
+/* File Tree Sidebar */
+#editor-sidebar {
+  width: 180px;
+  min-width: 140px;
   background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
-.file-tab {
-  background: transparent;
-  color: var(--text-secondary);
-  border: none;
-  padding: 8px 18px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all var(--transition);
-  border-bottom: 2px solid transparent;
-  position: relative;
+#fileTree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
 }
 
-.file-tab:hover {
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+  user-select: none;
+}
+
+.file-tree-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.file-tab.active {
+.file-tree-item.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-left-color: var(--accent-blue);
+}
+
+.file-tree-item .file-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.file-tree-item .file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-item .file-actions {
+  display: none;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.file-tree-item:hover .file-actions {
+  display: flex;
+}
+
+.file-tree-item .file-actions button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.file-tree-item .file-actions button:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+/* Add file button */
+.sidebar-add-btn {
+  width: calc(100% - 16px);
+  margin: 6px 8px;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px dashed var(--border-color);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.sidebar-add-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-blue);
+}
+
+/* Editor main area */
+#editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#editor-main #file-tabs {
+  display: flex;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+#editor-main .file-tab {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#editor-main .file-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+#editor-main .file-tab.active {
   color: var(--accent-blue);
   border-bottom-color: var(--accent-blue);
   background: var(--bg-base);
+}
+
+/* Rename input */
+.file-rename-input {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--accent-blue);
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 12px;
+  outline: none;
+  width: 100%;
+}
+
+/* Right click context menu */
+.context-menu {
+  position: fixed;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 140px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 1000;
+}
+
+.context-menu-item {
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.context-menu-item.delete {
+  color: var(--accent-red);
 }
 
 /* Editor Container */

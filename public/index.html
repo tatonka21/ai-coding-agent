@@ -28,12 +28,19 @@
     <div id="main-content">
       <!-- LEFT: Editor Panel -->
       <div id="editor-panel">
-        <div id="file-tabs">
-          <button class="file-tab active" data-file="index.html">📄 HTML</button>
-          <button class="file-tab" data-file="style.css">🎨 CSS</button>
-          <button class="file-tab" data-file="app.js">⚡ JS</button>
+        <div id="editor-sidebar">
+          <div class="sidebar-header">📁 Files</div>
+          <div id="fileTree"></div>
+          <button id="addFileBtn" class="sidebar-add-btn">+ Add File</button>
         </div>
-        <div id="editor-container"></div>
+        <div id="editor-main">
+          <div id="file-tabs">
+            <button class="file-tab active" data-file="index.html">📄 index.html</button>
+            <button class="file-tab" data-file="style.css">🎨 style.css</button>
+            <button class="file-tab" data-file="app.js">⚡ app.js</button>
+          </div>
+          <div id="editor-container"></div>
+        </div>
       </div>
 
       <!-- CENTER: Preview Panel -->

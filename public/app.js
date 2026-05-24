@@ -104,6 +104,13 @@ let chatHistory = [];
 let isStreaming = false;
 let previewTimeout = null;
 let attachedFileData = null; // { name, content } for file attachment
+
+// ===== FILE TREE STATE =====
+let fileTreeItems = [
+  { name: 'index.html', icon: '📄', language: 'html' },
+  { name: 'style.css', icon: '🎨', language: 'css' },
+  { name: 'app.js', icon: '⚡', language: 'javascript' }
+];
 // ===== MONACO EDITOR SETUP =====
 function initEditor() {
   require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
@@ -187,15 +194,22 @@ function switchFile(filename) {
     tab.classList.toggle('active', tab.dataset.file === filename);
   });
 
+  // Update sidebar active state
+  document.querySelectorAll('.file-tree-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.filename === filename);
+  });
+
   // Update editor
   if (editor) {
-    const lang = filename.endsWith('.html') ? 'html'
-      : filename.endsWith('.css') ? 'css'
-      : 'javascript';
+    const lang = getFileLanguage(filename);
     const model = editor.getModel();
     monaco.editor.setModelLanguage(model, lang);
     editor.setValue(files[filename]);
   }
+
+  // Sync file tree and tabs
+  renderFileTree();
+  renderFileTabs();
 }
 // ===== LIVE PREVIEW =====
 function updatePreview() {
@@ -276,36 +290,54 @@ function hideTypingIndicator() {
 // ===== CODE EXTRACTION & EDITOR UPDATES =====
 
 function parseCodeBlocksAndUpdateEditor(fullContent) {
-  const patterns = [
+  var patterns = [
     { lang: 'html', file: 'index.html', regex: /```html\s*([\s\S]*?)```/gi },
     { lang: 'css', file: 'style.css', regex: /```css\s*([\s\S]*?)```/gi },
     { lang: 'js', file: 'app.js', regex: /```(?:js|javascript)\s*([\s\S]*?)```/gi },
   ];
 
-  let updatedFiles = [];
-  let cleanedContent = fullContent;
+  // Add dynamic patterns for files not covered by standard ones
+  fileTreeItems.forEach(function(item) {
+    if (['index.html', 'style.css', 'app.js'].indexOf(item.name) === -1) {
+      var escapedName = item.name.replace(/[.*+?^${}()|[\]\\]/g, '\$&');
+      var namePattern = new RegExp('```' + escapedName + '\s*([\s\S]*?)```', 'gi');
+      patterns.push({ lang: getFileLanguage(item.name), file: item.name, regex: namePattern });
+    }
+  });
 
-  for (const pattern of patterns) {
+  var updatedFilesList = [];
+  var cleanedContent = fullContent;
+
+  for (var i = 0; i < patterns.length; i++) {
+    var pattern = patterns[i];
     pattern.regex.lastIndex = 0;
-    const match = pattern.regex.exec(fullContent);
+    var match = pattern.regex.exec(fullContent);
     if (match) {
-      const code = match[1].trim();
+      var code = match[1].trim();
       if (code) {
         files[pattern.file] = code;
-        updatedFiles.push(pattern.file);
+        if (!fileTreeItems.some(function(f) { return f.name === pattern.file; })) {
+          var ext = pattern.file.split('.').pop();
+          var iconMap = { html: '📄', css: '🎨', js: '⚡', jsx: '⚛️', ts: '🔷', json: '📋', md: '📝', py: '🐍' };
+          var langMap = { html: 'html', css: 'css', js: 'javascript', jsx: 'javascript', ts: 'typescript', json: 'json', md: 'markdown', py: 'python' };
+          fileTreeItems.push({ name: pattern.file, icon: iconMap[ext] || '📄', language: langMap[ext] || 'plaintext' });
+        }
+        updatedFilesList.push(pattern.file);
         cleanedContent = cleanedContent.replace(match[0], '');
       }
     }
   }
 
-  if (updatedFiles.length > 0) {
-    if (editor && updatedFiles.includes(currentFile)) {
+  if (updatedFilesList.length > 0) {
+    if (editor && updatedFilesList.indexOf(currentFile) !== -1) {
       editor.setValue(files[currentFile]);
-    } else if (editor && updatedFiles.length > 0) {
-      switchFile(updatedFiles[0]);
+    } else if (editor && updatedFilesList.length > 0) {
+      switchFile(updatedFilesList[0]);
     }
+    renderFileTree();
+    renderFileTabs();
     updatePreview();
-    return { updated: true, updatedFiles: updatedFiles, cleanedContent: cleanedContent.trim() };
+    return { updated: true, updatedFiles: updatedFilesList, cleanedContent: cleanedContent.trim() };
   }
 
   return { updated: false, updatedFiles: [], cleanedContent: fullContent };
@@ -528,6 +560,213 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+
+// ===== FILE TREE RENDERING =====
+function renderFileTree() {
+  const container = document.getElementById('fileTree');
+  if (!container) return;
+  container.innerHTML = '';
+
+  fileTreeItems.forEach((item, index) => {
+    const div = document.createElement('div');
+    div.className = 'file-tree-item' + (item.name === currentFile ? ' active' : '');
+    div.dataset.index = index;
+    div.dataset.filename = item.name;
+
+    div.innerHTML = '<span class="file-icon">' + item.icon + '</span>' +
+      '<span class="file-name">' + item.name + '</span>' +
+      '<span class="file-actions">' +
+      '<button class="rename-btn" title="Rename">✏️</button>' +
+      '<button class="delete-btn" title="Delete">🗑️</button>' +
+      '</span>';
+
+    div.addEventListener('click', (e) => {
+      if (!e.target.closest('.file-actions')) {
+        switchFile(item.name);
+        renderFileTree();
+      }
+    });
+
+    div.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, item.name, index);
+    });
+
+    div.querySelector('.rename-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      startRename(index, div);
+    });
+
+    div.querySelector('.delete-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteFile(item.name, index);
+    });
+
+    container.appendChild(div);
+  });
+}
+
+function startRename(index, treeItemDiv) {
+  const item = fileTreeItems[index];
+  const nameSpan = treeItemDiv.querySelector('.file-name');
+  const oldName = item.name;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'file-rename-input';
+  input.value = oldName;
+
+  nameSpan.replaceWith(input);
+  input.focus();
+  input.select();
+
+  const finishRename = () => {
+    const newName = input.value.trim();
+    if (newName && newName !== oldName) {
+      if (fileTreeItems.some(f => f.name === newName)) {
+        alert('File name already exists!');
+        input.value = oldName;
+        return;
+      }
+      item.name = newName;
+      const ext = newName.split('.').pop();
+      const iconMap = { html: '📄', css: '🎨', js: '⚡', jsx: '⚛️', ts: '🔷', json: '📋', md: '📝', py: '🐍' };
+      item.icon = iconMap[ext] || '📄';
+      const langMap = { html: 'html', css: 'css', js: 'javascript', jsx: 'javascript', ts: 'typescript', json: 'json', md: 'markdown', py: 'python' };
+      item.language = langMap[ext] || 'plaintext';
+      files[newName] = files[oldName];
+      delete files[oldName];
+      if (currentFile === oldName) {
+        currentFile = newName;
+        if (editor) {
+          const model = editor.getModel();
+          monaco.editor.setModelLanguage(model, item.language);
+          editor.setValue(files[newName]);
+        }
+      }
+      renderFileTabs();
+      renderFileTree();
+    }
+  };
+
+  input.addEventListener('blur', finishRename);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.value = oldName; input.blur(); }
+  });
+}
+
+function deleteFile(name, index) {
+  if (fileTreeItems.length <= 1) {
+    alert('Cannot delete the last file!');
+    return;
+  }
+  if (!confirm('Delete "' + name + '"?')) return;
+
+  fileTreeItems.splice(index, 1);
+  delete files[name];
+
+  if (currentFile === name) {
+    currentFile = fileTreeItems[0].name;
+    if (editor) {
+      const model = editor.getModel();
+      monaco.editor.setModelLanguage(model, fileTreeItems[0].language);
+      editor.setValue(files[currentFile]);
+    }
+  }
+
+  renderFileTabs();
+  renderFileTree();
+}
+
+function addNewFile() {
+  const name = prompt('Enter file name (e.g., script.js, styles.css, about.html):');
+  if (!name) return;
+
+  if (fileTreeItems.some(f => f.name === name)) {
+    alert('File already exists!');
+    return;
+  }
+
+  const ext = name.split('.').pop();
+  const iconMap = { html: '📄', css: '🎨', js: '⚡', jsx: '⚛️', ts: '🔷', json: '📋', md: '📝', py: '🐍', txt: '📄' };
+  const langMap = { html: 'html', css: 'css', js: 'javascript', jsx: 'javascript', ts: 'typescript', json: 'json', md: 'markdown', py: 'python', txt: 'plaintext' };
+
+  const newItem = { name, icon: iconMap[ext] || '📄', language: langMap[ext] || 'plaintext' };
+  fileTreeItems.push(newItem);
+
+  const defaultContent = {
+    html: '<!DOCTYPE html>\n<html>\n<head>\n  <title>New Page</title>\n</head>\n<body>\n\n</body>\n</html>',
+    css: '/* Styles */\n',
+    js: '// JavaScript\n',
+    py: '# Python\n'
+  };
+  files[name] = defaultContent[ext] || '';
+
+  switchFile(name);
+  renderFileTabs();
+  renderFileTree();
+
+  if (editor) editor.setValue(files[name]);
+}
+
+function showContextMenu(x, y, name, index) {
+  document.querySelector('.context-menu')?.remove();
+
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  menu.innerHTML = '<div class="context-menu-item rename-ctx">✏️ Rename</div>' +
+    '<div class="context-menu-item delete delete-ctx">🗑️ Delete</div>';
+
+  menu.querySelector('.rename-ctx').addEventListener('click', function() {
+    menu.remove();
+    const treeItem = document.querySelector('.file-tree-item[data-filename="' + name + '"]');
+    if (treeItem) startRename(index, treeItem);
+  });
+
+  menu.querySelector('.delete-ctx').addEventListener('click', function() {
+    menu.remove();
+    deleteFile(name, index);
+  });
+
+  document.body.appendChild(menu);
+
+  const closeMenu = function(e) {
+    if (!menu.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+    }
+  };
+  setTimeout(function() { document.addEventListener('click', closeMenu); }, 0);
+}
+
+function renderFileTabs() {
+  const tabsContainer = document.querySelector('#editor-main #file-tabs');
+  if (!tabsContainer) return;
+  tabsContainer.innerHTML = '';
+
+  fileTreeItems.forEach(function(item) {
+    const btn = document.createElement('button');
+    btn.className = 'file-tab' + (item.name === currentFile ? ' active' : '');
+    btn.dataset.file = item.name;
+    btn.textContent = item.icon + ' ' + item.name;
+    btn.addEventListener('click', function() {
+      switchFile(item.name);
+      renderFileTabs();
+      renderFileTree();
+    });
+    tabsContainer.appendChild(btn);
+  });
+}
+
+function getFileLanguage(filename) {
+  const ext = filename.split('.').pop();
+  const langMap = { html: 'html', css: 'css', js: 'javascript', jsx: 'javascript', ts: 'typescript', json: 'json', md: 'markdown', py: 'python', txt: 'plaintext' };
+  return langMap[ext] || 'plaintext';
+}
+
 // ===== LOAD MODELS =====
 async function loadModels() {
   const select = document.getElementById('modelSelect');
@@ -586,9 +825,13 @@ document.addEventListener('DOMContentLoaded', () => {
   initEditor();
   loadModels();
 
-  document.querySelectorAll('.file-tab').forEach(tab => {
-    tab.addEventListener('click', () => switchFile(tab.dataset.file));
-  });
+  // Render file tree and tabs after editor init
+  setTimeout(() => {
+    renderFileTree();
+    renderFileTabs();
+  }, 100);
+
+  document.getElementById('addFileBtn').addEventListener('click', addNewFile);
 
   document.getElementById('previewBtn').addEventListener('click', () => {
     if (editor) files[currentFile] = editor.getValue();
