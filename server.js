@@ -1,7 +1,8 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const vm = require('vm');
 
 const app = express();
@@ -177,6 +178,110 @@ The HTML should include <link rel="stylesheet" href="style.css"> and <script src
   reqOllama.write(payload);
   reqOllama.end();
 });
+// ===== PROJECTS DIRECTORY =====
+const PROJECTS_DIR = path.join(__dirname, 'projects');
+if (!fs.existsSync(PROJECTS_DIR)) fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+
+// ===== GIT INTEGRATION =====
+
+// Git Status
+app.post('/api/git/status', (req, res) => {
+  try {
+    const status = execSync('git status --short', { cwd: __dirname, encoding: 'utf8' }).trim();
+    const branch = execSync('git branch --show-current', { cwd: __dirname, encoding: 'utf8' }).trim();
+    const log = execSync('git log --oneline -10', { cwd: __dirname, encoding: 'utf8' }).trim();
+    const ahead = execSync('git rev-list --count @{u}..HEAD -- 2>nul || echo 0', { cwd: __dirname, encoding: 'utf8' }).trim();
+    res.json({ status, branch, log, ahead: parseInt(ahead) || 0 });
+  } catch (e) {
+    res.json({ status: '', branch: 'none', log: '', ahead: 0, error: 'Not a git repository or git not available' });
+  }
+});
+
+// Git Commit
+app.post('/api/git/commit', (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'Commit message required' });
+  try {
+    execSync('git add -A', { cwd: __dirname, encoding: 'utf8' });
+    execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { cwd: __dirname, encoding: 'utf8' });
+    res.json({ success: true });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
+// Git Push
+app.post('/api/git/push', (req, res) => {
+  try {
+    const result = execSync('git push', { cwd: __dirname, encoding: 'utf8', timeout: 30000 }).trim();
+    res.json({ success: true, output: result });
+  } catch (e) {
+    res.json({ error: e.stdout || e.message });
+  }
+});
+
+// Git Log
+app.post('/api/git/log', (req, res) => {
+  try {
+    const log = execSync('git log --oneline --graph --decorate -20', { cwd: __dirname, encoding: 'utf8' }).trim();
+    res.json({ log });
+  } catch (e) {
+    res.json({ log: '', error: e.message });
+  }
+});
+
+// ===== PROJECT MANAGEMENT =====
+
+// Project Save
+app.post('/api/project/save', (req, res) => {
+  const { name, files } = req.body;
+  if (!name || !files) return res.status(400).json({ error: 'Name and files required' });
+  
+  const projectDir = path.join(PROJECTS_DIR, name.replace(/[^a-zA-Z0-9-_]/g, '_'));
+  if (!fs.existsSync(projectDir)) fs.mkdirSync(projectDir, { recursive: true });
+  
+  for (const [filename, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(projectDir, filename), content, 'utf8');
+  }
+  
+  res.json({ success: true, path: projectDir });
+});
+
+// Project Load
+app.post('/api/project/load', (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  
+  const projectDir = path.join(PROJECTS_DIR, name);
+  if (!fs.existsSync(projectDir)) return res.status(404).json({ error: 'Project not found' });
+  
+  const files = {};
+  const entries = fs.readdirSync(projectDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isFile()) {
+      files[entry.name] = fs.readFileSync(path.join(projectDir, entry.name), 'utf8');
+    }
+  }
+  
+  res.json({ success: true, name, files });
+});
+
+// Project List
+app.get('/api/project/list', (req, res) => {
+  if (!fs.existsSync(PROJECTS_DIR)) return res.json({ projects: [] });
+  const projects = fs.readdirSync(PROJECTS_DIR).filter(f => {
+    return fs.statSync(path.join(PROJECTS_DIR, f)).isDirectory();
+  });
+  res.json({ projects });
+});
+
+// Export Files
+app.post('/api/project/export', (req, res) => {
+  const { files } = req.body;
+  if (!files) return res.status(400).json({ error: 'Files required' });
+  res.json({ success: true, files });
+});
+
 // PRE-WARM
 function prewarmModel() {
   const preferredModel = 'qwen2.5-coder:7b';

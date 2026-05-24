@@ -29,9 +29,42 @@
       <!-- LEFT: Editor Panel -->
       <div id="editor-panel">
         <div id="editor-sidebar">
-          <div class="sidebar-header">📁 Files</div>
-          <div id="fileTree"></div>
-          <button id="addFileBtn" class="sidebar-add-btn">+ Add File</button>
+          <div class="sidebar-header">
+            <div class="sidebar-tabs">
+              <button class="sidebar-tab active" data-view="files">📁 Files</button>
+              <button class="sidebar-tab" data-view="git">🔗 Git</button>
+            </div>
+          </div>
+          
+          <!-- Files View -->
+          <div id="filesView" class="sidebar-view active">
+            <div id="fileTree"></div>
+            <button id="addFileBtn" class="sidebar-add-btn">+ Add File</button>
+          </div>
+          
+          <!-- Git View -->
+          <div id="gitView" class="sidebar-view">
+            <div id="gitStatus">
+              <div class="git-info">
+                <span id="gitBranch">🌿 main</span>
+                <span id="gitAhead" class="git-ahead"></span>
+              </div>
+              <div id="gitStatusList"></div>
+            </div>
+            <div class="git-actions">
+              <input type="text" id="commitMessage" placeholder="Commit message..." />
+              <button id="commitBtn" class="git-btn commit">✔ Commit</button>
+              <div class="git-btn-row">
+                <button id="pushBtn" class="git-btn">⬆ Push</button>
+                <button id="pullBtn" class="git-btn">⬇ Pull</button>
+                <button id="refreshGitBtn" class="git-btn">🔄</button>
+              </div>
+            </div>
+            <div id="gitLog">
+              <div class="git-log-header">Recent Commits</div>
+              <div id="gitLogList"></div>
+            </div>
+          </div>
         </div>
         <div id="editor-main">
           <div id="file-tabs">
@@ -76,6 +109,11 @@
     <div id="buildBar">
       <input type="text" id="buildPrompt" placeholder="Describe the website or app you want to build..." />
       <button id="buildBtn" class="toolbar-btn accent">🤖 Build This</button>
+      <div class="git-bar-actions">
+        <button id="saveProjectBtn" class="toolbar-btn" title="Save Project">💾 Save</button>
+        <button id="loadProjectBtn" class="toolbar-btn" title="Load Project">📂 Open</button>
+        <button id="exportBtn" class="toolbar-btn" title="Export Code">📤 Export</button>
+      </div>
     </div>
   </div>
 

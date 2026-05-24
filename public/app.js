@@ -767,6 +767,249 @@ function getFileLanguage(filename) {
   return langMap[ext] || 'plaintext';
 }
 
+// ===== GIT INTEGRATION =====
+
+async function fetchGitStatus() {
+  try {
+    const res = await fetch('/api/git/status', { method: 'POST' });
+    const data = await res.json();
+    renderGitStatus(data);
+  } catch (e) {
+    document.getElementById('gitStatusList').innerHTML = '<div class="git-status-item error">⚠️ Git unavailable</div>';
+  }
+}
+
+function renderGitStatus(data) {
+  document.getElementById('gitBranch').textContent = '🌿 ' + (data.branch || 'none');
+  
+  if (data.ahead > 0) {
+    document.getElementById('gitAhead').textContent = '↑' + data.ahead;
+    document.getElementById('gitAhead').style.display = 'inline';
+  } else {
+    document.getElementById('gitAhead').style.display = 'none';
+  }
+  
+  const list = document.getElementById('gitStatusList');
+  if (data.status) {
+    const lines = data.status.split('\n').filter(function(l) { return l.trim(); });
+    list.innerHTML = lines.map(function(line) {
+      var status = line.substring(0, 2).trim();
+      var file = line.substring(3);
+      var statusMap = { 'M': '📝', 'A': '➕', 'D': '🗑️', 'R': '🔄', '?': '❓', '!!': '🚫' };
+      var icon = statusMap[status.trim()] || '📄';
+      return '<div class="git-status-item">' + icon + ' ' + file + ' <span class="git-status-badge">' + status + '</span></div>';
+    }).join('');
+  } else {
+    list.innerHTML = '<div class="git-status-item clean">✅ Working tree clean</div>';
+  }
+}
+
+async function gitCommit() {
+  var input = document.getElementById('commitMessage');
+  var msg = input.value.trim();
+  if (!msg) return;
+  
+  var btn = document.getElementById('commitBtn');
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  
+  try {
+    var res = await fetch('/api/git/commit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg })
+    });
+    var data = await res.json();
+    if (data.success) {
+      input.value = '';
+      fetchGitStatus();
+      fetchGitLog();
+      showToast('✅ Committed: ' + msg);
+    } else {
+      showToast('⚠️ ' + (data.error || 'Commit failed'));
+    }
+  } catch (e) {
+    showToast('⚠️ Commit error');
+  }
+  btn.textContent = '✔ Commit';
+  btn.disabled = false;
+}
+
+async function gitPush() {
+  var btn = document.getElementById('pushBtn');
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    var res = await fetch('/api/git/push', { method: 'POST' });
+    var data = await res.json();
+    if (data.success) {
+      showToast('✅ Pushed to remote!');
+      fetchGitStatus();
+    } else {
+      showToast('⚠️ ' + (data.error || 'Push failed'));
+    }
+  } catch (e) {
+    showToast('⚠️ Push error');
+  }
+  btn.textContent = '⬆ Push';
+  btn.disabled = false;
+}
+
+async function fetchGitLog() {
+  try {
+    var res = await fetch('/api/git/log', { method: 'POST' });
+    var data = await res.json();
+    var list = document.getElementById('gitLogList');
+    if (data.log) {
+      list.innerHTML = data.log.split('\n').map(function(line) {
+        return '<div class="git-log-item">' + line + '</div>';
+      }).join('');
+    } else {
+      list.innerHTML = '<div class="git-log-item muted">No commits yet</div>';
+    }
+  } catch (e) {}
+}
+
+// ===== PROJECT MANAGEMENT =====
+
+async function saveProject() {
+  var name = prompt('Project name:', 'my-project');
+  if (!name) return;
+  
+  var allFiles = {};
+  for (var key in files) {
+    if (files.hasOwnProperty(key)) allFiles[key] = files[key];
+  }
+  if (editor) allFiles[currentFile] = editor.getValue();
+  
+  try {
+    var res = await fetch('/api/project/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, files: allFiles })
+    });
+    var data = await res.json();
+    if (data.success) {
+      showToast('💾 Saved "' + name + '" to disk!');
+    } else {
+      showToast('⚠️ ' + (data.error || 'Save failed'));
+    }
+  } catch (e) {
+    showToast('⚠️ Save error');
+  }
+}
+
+async function loadProject() {
+  try {
+    var listRes = await fetch('/api/project/list');
+    var listData = await listRes.json();
+    
+    if (!listData.projects || listData.projects.length === 0) {
+      showToast('📂 No saved projects found');
+      return;
+    }
+    
+    var projectList = listData.projects.map(function(p, i) { return (i+1) + '. ' + p; }).join('\n');
+    var choice = prompt('Saved projects:\n' + projectList + '\n\nEnter project name to load:');
+    if (!choice) return;
+    
+    var res = await fetch('/api/project/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: choice.trim() })
+    });
+    var data = await res.json();
+    
+    if (data.success && data.files) {
+      var newItems = [];
+      for (var filename in data.files) {
+        if (data.files.hasOwnProperty(filename)) {
+          files[filename] = data.files[filename];
+          var ext = filename.split('.').pop();
+          var iconMap = { 'html': '📄', 'css': '🎨', 'js': '⚡', 'jsx': '⚛️', 'ts': '🔷', 'json': '📋', 'md': '📝', 'py': '🐍' };
+          var langMap = { 'html': 'html', 'css': 'css', 'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'json': 'json', 'md': 'markdown', 'py': 'python' };
+          newItems.push({ name: filename, icon: iconMap[ext] || '📄', language: langMap[ext] || 'plaintext' });
+        }
+      }
+      
+      fileTreeItems = newItems;
+      if (newItems.length > 0) {
+        switchFile(newItems[0].name);
+        if (editor) editor.setValue(files[newItems[0].name]);
+      }
+      renderFileTree();
+      renderFileTabs();
+      updatePreview();
+      showToast('📂 Loaded "' + choice + '"');
+    } else {
+      showToast('⚠️ ' + (data.error || 'Load failed'));
+    }
+  } catch (e) {
+    showToast('⚠️ Load error');
+  }
+}
+
+async function exportProject() {
+  var allFiles = {};
+  for (var key in files) {
+    if (files.hasOwnProperty(key)) allFiles[key] = files[key];
+  }
+  if (editor) allFiles[currentFile] = editor.getValue();
+  
+  try {
+    var res = await fetch('/api/project/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: allFiles })
+    });
+    var data = await res.json();
+    
+    if (data.success) {
+      var blob = new Blob([JSON.stringify(data.files, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'project-export.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('📤 Exported as JSON!');
+    }
+  } catch (e) {
+    showToast('⚠️ Export error');
+  }
+}
+
+// ===== SIDEBAR TOGGLE =====
+function setupSidebarTabs() {
+  document.querySelectorAll('.sidebar-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.sidebar-tab').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelectorAll('.sidebar-view').forEach(function(v) { v.classList.remove('active'); });
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.view + 'View').classList.add('active');
+      
+      if (tab.dataset.view === 'git') {
+        fetchGitStatus();
+        fetchGitLog();
+      }
+    });
+  });
+}
+
+// ===== TOAST NOTIFICATIONS =====
+function showToast(message) {
+  var toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.className = 'toast show';
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(function() { toast.className = 'toast'; }, 3000);
+}
+
 // ===== LOAD MODELS =====
 async function loadModels() {
   const select = document.getElementById('modelSelect');
@@ -846,4 +1089,34 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   setupFileUpload();
+
+  // Git Integration
+  setupSidebarTabs();
+
+  var commitBtn = document.getElementById('commitBtn');
+  if (commitBtn) commitBtn.addEventListener('click', gitCommit);
+
+  var pushBtn = document.getElementById('pushBtn');
+  if (pushBtn) pushBtn.addEventListener('click', gitPush);
+
+  var refreshGitBtn = document.getElementById('refreshGitBtn');
+  if (refreshGitBtn) refreshGitBtn.addEventListener('click', function() {
+    fetchGitStatus();
+    fetchGitLog();
+  });
+
+  var commitMessage = document.getElementById('commitMessage');
+  if (commitMessage) commitMessage.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); gitCommit(); }
+  });
+
+  // Project Management
+  var saveProjectBtn = document.getElementById('saveProjectBtn');
+  if (saveProjectBtn) saveProjectBtn.addEventListener('click', saveProject);
+
+  var loadProjectBtn = document.getElementById('loadProjectBtn');
+  if (loadProjectBtn) loadProjectBtn.addEventListener('click', loadProject);
+
+  var exportBtn = document.getElementById('exportBtn');
+  if (exportBtn) exportBtn.addEventListener('click', exportProject);
 });
