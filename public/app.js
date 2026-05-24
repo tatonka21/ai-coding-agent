@@ -1,5 +1,7 @@
 // ============================================
 // AI Coding Agent - Frontend Application
+// 3-Panel Layout: Editor | Preview | Chat
+// AI writes code directly to Monaco editor
 // ============================================
 
 // ===== STATE =====
@@ -100,8 +102,8 @@ let currentFile = 'index.html';
 let editor = null;
 let chatHistory = [];
 let isStreaming = false;
-let previewTimeout;
-
+let previewTimeout = null;
+let attachedFileData = null; // { name, content } for file attachment
 // ===== MONACO EDITOR SETUP =====
 function initEditor() {
   require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
@@ -162,16 +164,17 @@ function initEditor() {
       padding: { top: 8 },
     });
 
-    // Listen for changes
+    // Listen for changes -> update files state + auto-preview
     editor.onDidChangeModelContent(() => {
       files[currentFile] = editor.getValue();
       debouncedPreview();
     });
 
-    // Init preview
+    // Initial preview
     updatePreview();
   });
 }
+
 function switchFile(filename) {
   if (editor) {
     files[currentFile] = editor.getValue();
@@ -194,24 +197,19 @@ function switchFile(filename) {
     editor.setValue(files[filename]);
   }
 }
-
 // ===== LIVE PREVIEW =====
 function updatePreview() {
   const html = files['index.html'];
   const css = files['style.css'];
   const js = files['app.js'];
 
-  // Inject CSS and JS into the HTML for preview
   let previewHtml = html;
 
-  // Replace external references with inline content
-  // Inject CSS before closing </head>
   if (css) {
     const cssInjection = '<style>\n' + css + '\n</style>\n';
     previewHtml = previewHtml.replace('</head>', cssInjection + '</head>');
   }
 
-  // Inject JS before closing </body>
   if (js) {
     const jsInjection = '<script>\n' + js + '\n<\/script>\n';
     previewHtml = previewHtml.replace('</body>', jsInjection + '</body>');
@@ -223,37 +221,27 @@ function updatePreview() {
   }
 }
 
-// Debounce preview updates
 function debouncedPreview() {
   clearTimeout(previewTimeout);
   previewTimeout = setTimeout(updatePreview, 300);
 }
-
-// ===== AI CHAT =====
+// ===== CHAT UTILITIES =====
 
 function formatMessage(text) {
-  // Escape HTML first
   let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-  // Replace code blocks with syntax highlighting
   html = html.replace(/```(\w*)\s*([\s\S]*?)```/g, (match, lang, code) => {
-    const langClass = lang ? ` class="language-${lang}"` : '';
-    return `<pre><code${langClass}>${code.trim()}</code></pre>`;
+    const langClass = lang ? ' class="language-' + lang + '"' : '';
+    return '<pre><code' + langClass + '>' + code.trim() + '</code></pre>';
   });
-
-  // Replace inline code
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Replace newlines with <br>
   html = html.replace(/\n/g, '<br>');
-
   return html;
 }
 
 function addMessage(role, content) {
   const messagesDiv = document.getElementById('chatMessages');
   const msgDiv = document.createElement('div');
-  msgDiv.className = `message ${role}`;
+  msgDiv.className = 'message ' + role;
 
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';
@@ -261,8 +249,6 @@ function addMessage(role, content) {
 
   msgDiv.appendChild(bubble);
   messagesDiv.appendChild(msgDiv);
-
-  // Scroll to bottom
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
   return { div: msgDiv, bubble };
@@ -287,23 +273,61 @@ function hideTypingIndicator() {
   const indicator = document.getElementById('typingIndicator');
   if (indicator) indicator.remove();
 }
+// ===== CODE EXTRACTION & EDITOR UPDATES =====
+
+function parseCodeBlocksAndUpdateEditor(fullContent) {
+  const patterns = [
+    { lang: 'html', file: 'index.html', regex: /```html\s*([\s\S]*?)```/gi },
+    { lang: 'css', file: 'style.css', regex: /```css\s*([\s\S]*?)```/gi },
+    { lang: 'js', file: 'app.js', regex: /```(?:js|javascript)\s*([\s\S]*?)```/gi },
+  ];
+
+  let updatedFiles = [];
+  let cleanedContent = fullContent;
+
+  for (const pattern of patterns) {
+    pattern.regex.lastIndex = 0;
+    const match = pattern.regex.exec(fullContent);
+    if (match) {
+      const code = match[1].trim();
+      if (code) {
+        files[pattern.file] = code;
+        updatedFiles.push(pattern.file);
+        cleanedContent = cleanedContent.replace(match[0], '');
+      }
+    }
+  }
+
+  if (updatedFiles.length > 0) {
+    if (editor && updatedFiles.includes(currentFile)) {
+      editor.setValue(files[currentFile]);
+    } else if (editor && updatedFiles.length > 0) {
+      switchFile(updatedFiles[0]);
+    }
+    updatePreview();
+    return { updated: true, updatedFiles: updatedFiles, cleanedContent: cleanedContent.trim() };
+  }
+
+  return { updated: false, updatedFiles: [], cleanedContent: fullContent };
+}
 
 async function sendChatMessage() {
   const input = document.getElementById('chatInput');
   const message = input.value.trim();
   if (!message || isStreaming) return;
 
+  let fullMessage = message;
+  if (attachedFileData) {
+    fullMessage = '[Attached file: ' + attachedFileData.name + ']\n```\n' + attachedFileData.content + '\n```\n\n' + message;
+    clearAttachedFile();
+  }
+
   input.value = '';
   isStreaming = true;
 
-  // Add user message to chat
-  addMessage('user', message);
-
-  // Show typing indicator
+  addMessage('user', fullMessage);
   showTypingIndicator();
-
-  // Add to history
-  chatHistory.push({ role: 'user', content: message });
+  chatHistory.push({ role: 'user', content: fullMessage });
 
   const model = document.getElementById('modelSelect').value;
 
@@ -311,18 +335,19 @@ async function sendChatMessage() {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: [
-        { role: 'system', content: 'You are a helpful AI coding assistant. Help the user write code.' },
-        ...chatHistory
-      ]})
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: 'You are an expert AI coding assistant that builds complete websites and web apps. Your PRIMARY job is to write code that goes DIRECTLY into the user\'s editor tabs.\n\nCRITICAL RULES:\n1. When the user asks you to build or modify something, ALWAYS output the COMPLETE code using these code blocks:\n   - ```html for HTML files (goes to index.html tab)\n   - ```css for CSS files (goes to style.css tab)\n   - ```js or ```javascript for JavaScript files (goes to app.js tab)\n2. NEVER just explain how to do something — WRITE THE CODE and output it in the code blocks.\n3. If you need to modify multiple files, output multiple code blocks (one for each file type).\n4. Always write COMPLETE, working code. Not snippets. Not examples. Full files.\n5. After the code blocks, you can add a brief explanation if needed, but the CODE comes FIRST.\n\nExample response format:\n```html\n<!DOCTYPE html>\n<html>\n...complete HTML...</html>\n```\n\n```css\n/* Complete CSS */\n```\n\n```js\n// Complete JavaScript\n```\n\nNow go build something amazing!' },
+          ...chatHistory
+        ]
+      })
     });
 
     hideTypingIndicator();
 
-    // Create AI message container
     const msgDiv = document.createElement('div');
     msgDiv.className = 'message ai';
-
     const bubble = document.createElement('div');
     bubble.className = 'msg-bubble';
     msgDiv.appendChild(bubble);
@@ -337,10 +362,8 @@ async function sendChatMessage() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       const chunk = decoder.decode(value);
       const lines = chunk.split('\n').filter(l => l.trim());
-
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           try {
@@ -356,7 +379,18 @@ async function sendChatMessage() {
       }
     }
 
-    chatHistory.push({ role: 'assistant', content: fullContent });
+    const result = parseCodeBlocksAndUpdateEditor(fullContent);
+
+    if (result.updated) {
+      const noticeDiv = document.createElement('div');
+      noticeDiv.className = 'code-update-notice';
+      noticeDiv.textContent = "🧙‍♂️ I've updated your code! Check the editor.";
+      bubble.appendChild(noticeDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      chatHistory.push({ role: 'assistant', content: result.cleanedContent || '(Code was written to editor)' });
+    } else {
+      chatHistory.push({ role: 'assistant', content: fullContent });
+    }
   } catch (err) {
     hideTypingIndicator();
     addMessage('ai', '⚠️ Error: Failed to connect to AI. Is Ollama running?');
@@ -364,7 +398,6 @@ async function sendChatMessage() {
 
   isStreaming = false;
 }
-
 // ===== BUILD PROJECT =====
 async function buildProject() {
   const input = document.getElementById('buildPrompt');
@@ -390,26 +423,27 @@ async function buildProject() {
       return;
     }
 
-    // Update files with generated content
-    if (data.html) files['index.html'] = data.html;
-    if (data.css) files['style.css'] = data.css;
-    if (data.js) files['app.js'] = data.js;
+    const fullContent = data.fullContent || data.response || '';
+    const result = parseCodeBlocksAndUpdateEditor(fullContent);
 
-    // Switch to HTML tab if building fresh
-    if (currentFile !== 'index.html') {
-      switchFile('index.html');
-    } else if (editor) {
-      editor.setValue(files[currentFile]);
+    if (result.updated) {
+      addMessage('ai', '✅ Project built successfully! The code has been written to the editor tabs.');
+      addMessage('ai', '📁 Updated: ' + result.updatedFiles.join(', '));
+    } else if (data.html || data.css || data.js) {
+      if (data.html) files['index.html'] = data.html;
+      if (data.css) files['style.css'] = data.css;
+      if (data.js) files['app.js'] = data.js;
+
+      if (currentFile !== 'index.html') {
+        switchFile('index.html');
+      } else if (editor) {
+        editor.setValue(files[currentFile]);
+      }
+      updatePreview();
+      addMessage('ai', '✅ Project built successfully! Check the preview.');
+    } else {
+      addMessage('ai', fullContent || '⚠️ No code was generated. Please try a more specific prompt.');
     }
-
-    updatePreview();
-    addMessage('ai', '✅ Project built successfully! Check the preview below.');
-
-    // Show what was generated in chat
-    const contentDiv = document.createElement('div');
-    contentDiv.innerHTML = formatMessage(data.fullContent || '');
-    // Just reference it
-    addMessage('ai', 'The generated files have been loaded into the editor tabs above.');
   } catch (err) {
     addMessage('ai', '⚠️ Build failed: ' + err.message);
   } finally {
@@ -418,31 +452,82 @@ async function buildProject() {
   }
 }
 
-// ===== EXPORT PROJECT =====
-function exportProject() {
-  // Save current editor content
-  if (editor) files[currentFile] = editor.getValue();
-
-  const project = {
-    name: 'AI-Generated Project',
-    version: '1.0.0',
-    files: {
-      'index.html': files['index.html'],
-      'style.css': files['style.css'],
-      'app.js': files['app.js']
-    },
-    exportedAt: new Date().toISOString()
-  };
-
-  const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'ai-project.json';
-  a.click();
-  URL.revokeObjectURL(url);
+// ===== FILE ATTACHMENT =====
+function setupFileUpload() {
+  const attachBtn = document.getElementById('attachBtn');
+  
+  attachBtn.addEventListener('click', () => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.html,.css,.js,.txt,.json,.md,.png,.jpg,.jpeg,.gif,.svg';
+    fileInput.multiple = false;
+    
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      
+      if (file.type.startsWith('image/')) {
+        reader.onload = (event) => {
+          const dataUrl = event.target.result;
+          const markdown = '![' + file.name + '](' + dataUrl + ')';
+          insertIntoChatInput(markdown);
+          showFileBadge(file.name);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        reader.onload = (event) => {
+          const content = event.target.result;
+          attachedFileData = { name: file.name, content: content };
+          showFileBadge(file.name);
+        };
+        reader.readAsText(file);
+      }
+    });
+    
+    fileInput.click();
+  });
 }
 
+function showFileBadge(fileName) {
+  const existingBadge = document.querySelector('.file-attach-badge');
+  if (existingBadge) existingBadge.remove();
+  
+  const inputArea = document.getElementById('chatInputArea');
+  const badge = document.createElement('div');
+  badge.className = 'file-attach-badge';
+  badge.innerHTML = '📎 ' + escapeHtml(fileName) + ' <span class="remove-attach" title="Remove file">✕</span>';
+  
+  inputArea.insertBefore(badge, inputArea.querySelector('#chatInput'));
+  
+  badge.querySelector('.remove-attach').addEventListener('click', () => {
+    badge.remove();
+    attachedFileData = null;
+  });
+}
+
+function clearAttachedFile() {
+  attachedFileData = null;
+  const badge = document.querySelector('.file-attach-badge');
+  if (badge) badge.remove();
+}
+
+function insertIntoChatInput(text) {
+  const input = document.getElementById('chatInput');
+  const cursorPos = input.selectionStart;
+  const before = input.value.substring(0, cursorPos);
+  const after = input.value.substring(cursorPos);
+  input.value = before + text + after;
+  input.focus();
+  input.selectionStart = input.selectionEnd = cursorPos + text.length;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 // ===== LOAD MODELS =====
 async function loadModels() {
   const select = document.getElementById('modelSelect');
@@ -477,18 +562,11 @@ async function loadModels() {
 
 // ===== KEYBOARD SHORTCUTS =====
 document.addEventListener('keydown', (e) => {
-  // Ctrl+Enter: Run preview
   if (e.ctrlKey && e.key === 'Enter') {
     e.preventDefault();
     if (editor) files[currentFile] = editor.getValue();
     updatePreview();
   }
-  // Ctrl+B: Build project
-  if (e.ctrlKey && e.key === 'b') {
-    e.preventDefault();
-    buildProject();
-  }
-  // Enter in chat input (without shift): Send
   if (e.key === 'Enter' && !e.shiftKey) {
     const active = document.activeElement;
     if (active && active.id === 'chatInput') {
@@ -498,53 +576,31 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// ===== WINDOW RESIZE HANDLER =====
+// ===== WINDOW RESIZE =====
 window.addEventListener('resize', () => {
   if (editor) editor.layout();
 });
 
 // ===== EVENT BINDING =====
 document.addEventListener('DOMContentLoaded', () => {
-  // Init editor
   initEditor();
-
-  // Load available models
   loadModels();
 
-  // File tab switching
   document.querySelectorAll('.file-tab').forEach(tab => {
     tab.addEventListener('click', () => switchFile(tab.dataset.file));
   });
 
-  // Send chat message
-  document.getElementById('sendChatBtn').addEventListener('click', sendChatMessage);
-
-  // Run button (preview header)
-  document.getElementById('runBtn').addEventListener('click', () => {
+  document.getElementById('previewBtn').addEventListener('click', () => {
     if (editor) files[currentFile] = editor.getValue();
     updatePreview();
   });
 
-  // Run button (footer)
-  const runBtnFooter = document.getElementById('runBtnFooter');
-  if (runBtnFooter) {
-    runBtnFooter.addEventListener('click', () => {
-      if (editor) files[currentFile] = editor.getValue();
-      updatePreview();
-    });
-  }
+  document.getElementById('sendChatBtn').addEventListener('click', sendChatMessage);
 
-  // Build button
   document.getElementById('buildBtn').addEventListener('click', buildProject);
-
-  // Build prompt: Enter to build
   document.getElementById('buildPrompt').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      buildProject();
-    }
+    if (e.key === 'Enter') { e.preventDefault(); buildProject(); }
   });
 
-  // Export button
-  document.getElementById('exportBtn').addEventListener('click', exportProject);
+  setupFileUpload();
 });

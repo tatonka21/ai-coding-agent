@@ -24,9 +24,9 @@
       </div>
     </header>
 
-    <!-- Main Content Area -->
+    <!-- Main Content: Three Equal Columns -->
     <div id="main-content">
-      <!-- Left: Editor -->
+      <!-- LEFT: Editor Panel -->
       <div id="editor-panel">
         <div id="file-tabs">
           <button class="file-tab active" data-file="index.html">📄 HTML</button>
@@ -36,9 +36,18 @@
         <div id="editor-container"></div>
       </div>
 
-      <!-- Right: Chat Panel -->
+      <!-- CENTER: Preview Panel -->
+      <div id="preview-panel">
+        <div class="panel-header">
+          <span>🔍 Live Preview</span>
+          <button id="previewBtn" title="Run / Refresh Preview">▶ Preview</button>
+        </div>
+        <iframe id="preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
+      </div>
+
+      <!-- RIGHT: Chat Panel -->
       <div id="chat-panel">
-        <div class="chat-header">
+        <div class="panel-header chat-header">
           <span>🤖 AI Agent</span>
         </div>
         <div id="chatMessages">
@@ -49,30 +58,18 @@
           </div>
         </div>
         <div id="chatInputArea">
+          <button id="attachBtn" class="attach-btn" title="Attach file">+</button>
           <textarea id="chatInput" placeholder="Ask the AI to build or modify your app..." rows="2"></textarea>
-          <button id="sendChatBtn">➤</button>
+          <button id="sendChatBtn" title="Send message">➤</button>
         </div>
       </div>
     </div>
 
-    <!-- Bottom: Preview -->
-    <div id="preview-panel">
-      <div class="preview-header">
-        <span>🔍 Live Preview</span>
-        <button id="runBtn" title="Run / Refresh Preview">▶ Run</button>
-      </div>
-      <iframe id="preview-frame" sandbox="allow-scripts allow-modals"></iframe>
+    <!-- Build This Bar -->
+    <div id="buildBar">
+      <input type="text" id="buildPrompt" placeholder="Describe the website or app you want to build..." />
+      <button id="buildBtn" class="toolbar-btn accent">🤖 Build This</button>
     </div>
-
-    <!-- Bottom Toolbar -->
-    <footer id="toolbar">
-      <button id="runBtnFooter" class="toolbar-btn primary">▶ Run</button>
-      <div class="toolbar-build">
-        <input type="text" id="buildPrompt" placeholder="Describe the website you want to build..." />
-        <button id="buildBtn" class="toolbar-btn accent">🤖 Build This</button>
-      </div>
-      <button id="exportBtn" class="toolbar-btn">📤 Export</button>
-    </footer>
   </div>
 
   <!-- Monaco Editor -->

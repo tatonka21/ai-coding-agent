@@ -1,5 +1,5 @@
 /* ============================================
-   AI Coding Agent - Dark IDE Theme
+   AI Coding Agent - Dark IDE Theme (3-Panel)
    ============================================ */
 
 /* CSS Variables */
@@ -36,6 +36,13 @@ body {
   background: var(--bg-base);
   color: var(--text-primary);
   height: 100vh;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
@@ -113,18 +120,18 @@ body {
 }
 
 /* ============================================
-   MAIN CONTENT (Editor + Chat)
+   MAIN CONTENT - Three Equal Columns
    ============================================ */
 #main-content {
   display: flex;
   flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* Editor Panel (60%) */
+/* ============================================
+   EDITOR PANEL (Left)
+   ============================================ */
 #editor-panel {
-  width: 60%;
+  flex: 1;
+  width: 0;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border-color);
@@ -170,23 +177,77 @@ body {
 }
 
 /* ============================================
-   CHAT PANEL (40%)
+   PREVIEW PANEL (Center)
+   ============================================ */
+#preview-panel {
+  flex: 1;
+  width: 0;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-color);
+  background: var(--bg-base);
+}
+
+#preview-panel .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#previewBtn {
+  background: var(--accent-green);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+
+#previewBtn:hover {
+  background: #16a34a;
+}
+
+#preview-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+  min-height: 0;
+}
+
+/* ============================================
+   CHAT PANEL (Right)
    ============================================ */
 #chat-panel {
-  width: 40%;
+  flex: 1;
+  width: 0;
+  min-width: 250px;
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
 }
 
-.chat-header {
+/* ============================================
+   PANEL HEADER (Shared)
+   ============================================ */
+.panel-header {
   padding: 10px 14px;
   font-size: 14px;
   font-weight: 600;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
+.panel-header span {
+  flex: 1;
+}
 /* Chat Messages Area */
 #chatMessages {
   flex: 1;
@@ -195,21 +256,22 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
 }
 
 /* Message Bubbles */
 .message {
   display: flex;
   flex-direction: column;
-  max-width: 90%;
+  max-width: 100%;
 }
 
 .message.user {
-  align-self: flex-end;
+  align-items: flex-end;
 }
 
 .message.ai {
-  align-self: flex-start;
+  align-items: flex-start;
 }
 
 .msg-bubble {
@@ -219,6 +281,7 @@ body {
   line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
+  max-width: 100%;
 }
 
 .message.user .msg-bubble {
@@ -291,6 +354,30 @@ body {
   flex-shrink: 0;
 }
 
+.attach-btn {
+  width: 36px;
+  height: 36px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.attach-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-blue);
+}
+
 #chatInput {
   flex: 1;
   background: var(--bg-elevated);
@@ -315,143 +402,120 @@ body {
 }
 
 #sendChatBtn {
+  width: 36px;
+  height: 36px;
   background: var(--accent-blue);
   color: #fff;
   border: none;
-  border-radius: var(--radius);
-  padding: 10px 16px;
+  border-radius: 50%;
   font-size: 16px;
   cursor: pointer;
   transition: background var(--transition);
   flex-shrink: 0;
-}
-
-/* ============================================
-   PREVIEW PANEL
-   ============================================ */
-#preview-panel {
-  height: 35vh;
-  min-height: 200px;
-  max-height: 50vh;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-base);
-  flex-shrink: 0;
-}
-
-.preview-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 14px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
 }
 
-.preview-header span {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+#sendChatBtn:hover {
+  background: var(--accent-blue-hover);
 }
 
-#runBtn {
-  background: var(--accent-green);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 4px 12px;
+/* File attachment badge */
+.file-attach-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
   font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-attach-badge .remove-attach {
   cursor: pointer;
-  transition: background var(--transition);
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-left: 2px;
 }
 
-#runBtn:hover {
-  background: #16a34a;
+.file-attach-badge .remove-attach:hover {
+  color: var(--accent-red);
 }
 
-#preview-frame {
-  flex: 1;
-  width: 100%;
-  border: none;
-  background: #fff;
+/* Code update notice in chat */
+.code-update-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin-top: 6px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--accent-green);
 }
-
-/* ============================================
-   BOTTOM TOOLBAR
-   ============================================ */
-#toolbar {
+/* ---- BUILD BAR ---- */
+#buildBar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 16px;
   background: var(--bg-surface);
   border-top: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
-.toolbar-btn {
+#buildBar input {
+  flex: 1;
   background: var(--bg-elevated);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  padding: 6px 14px;
+  padding: 8px 12px;
   font-size: 13px;
-  cursor: pointer;
-  transition: all var(--transition);
-  white-space: nowrap;
+  outline: none;
 }
 
-.toolbar-btn:hover {
-  background: var(--bg-hover);
-}
-
-.toolbar-btn.primary {
-  background: var(--accent-blue);
-  color: #fff;
-  border-color: var(--accent-blue);
-}
-
-.toolbar-btn.primary:hover {
-  background: var(--accent-blue-hover);
-}
-
-.toolbar-btn.accent {
-  background: var(--accent-purple);
-  color: #fff;
+#buildBar input:focus {
   border-color: var(--accent-purple);
 }
 
-.toolbar-btn.accent:hover {
+#buildBar .toolbar-btn.accent {
+  background: var(--accent-purple);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+#buildBar .toolbar-btn.accent:hover {
   background: #9333ea;
 }
 
-.toolbar-build {
-  flex: 1;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-#buildPrompt {
-  flex: 1;
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 6px 12px;
-  font-size: 13px;
-  outline: none;
-  min-width: 0;
-}
-
-#buildPrompt:focus {
-  border-color: var(--accent-purple);
-}
-
-#buildPrompt::placeholder {
-  color: var(--text-muted);
+/* ---- CODE UPDATE NOTICE ---- */
+.code-update-notice {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #4ade80;
 }
 
 /* ============================================
@@ -478,25 +542,24 @@ body {
 /* ============================================
    RESPONSIVE
    ============================================ */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   #main-content {
     flex-direction: column;
   }
 
-  #editor-panel {
-    width: 100%;
-    height: 50%;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-  }
-
+  #editor-panel,
+  #preview-panel,
   #chat-panel {
-    width: 100%;
-    height: 50%;
+    width: 100% !important;
+    flex: none;
+    height: 33.33vh;
+    min-width: 0;
+    border-right: none;
   }
 
   #preview-panel {
-    height: 30vh;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
   }
 
   #topbar {
@@ -508,15 +571,6 @@ body {
   .topbar-center {
     width: 100%;
     justify-content: center;
-  }
-
-  #toolbar {
-    flex-wrap: wrap;
-  }
-
-  .toolbar-build {
-    width: 100%;
-    order: -1;
   }
 
   .file-tab {
